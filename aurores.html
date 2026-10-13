@@ -197,6 +197,7 @@ async function fetchWith(url,kind){
   finally{ clearTimeout(to); }
 }
 const viaRelay=new Set();
+async function noaaAny(paths,kind){ let err; for(const p of paths){ try{ return await noaa(p,kind); }catch(e){ err=e; } } throw err; }
 async function noaa(path,kind){
   const url=SWPC+path;
   try{ return await fetchWith(url+'?_='+Math.floor(Date.now()/60000),kind); }
@@ -215,8 +216,8 @@ function parse27(txt){ const map=new Map(); const mo=MO; const re=/^(\d{4})\s+([
 function parseOM(j){ const h=j.hourly, m=new Map(); h.time.forEach((t,i)=>{ const o={}; for(const k in h){ if(k!=='time') o[k]=h[k][i]; } m.set(Date.parse(t+':00Z'),o); }); return m; }
 function parseNowcast(mag,plasma){
   const now=Date.now();
-  const m=rowsToObjects(mag).map(r=>({t:parseUTC(r.time_tag),bz:parseFloat(r.bz_gsm)})).filter(r=>isFinite(r.t)&&isFinite(r.bz));
-  const p=rowsToObjects(plasma).map(r=>({t:parseUTC(r.time_tag),v:parseFloat(r.speed),n:parseFloat(r.density)})).filter(r=>isFinite(r.t));
+  const m=rowsToObjects(mag).filter(r=>r.active!==false).map(r=>({t:parseUTC(r.time_tag),bz:parseFloat(r.bz_gsm)})).filter(r=>isFinite(r.t)&&isFinite(r.bz));
+  const p=rowsToObjects(plasma).filter(r=>r.active!==false).map(r=>({t:parseUTC(r.time_tag),v:parseFloat(r.speed??r.proton_speed),n:parseFloat(r.density??r.proton_density)})).filter(r=>isFinite(r.t));
   const last=m[m.length-1]; if(!last) return null;
   const rm=m.filter(r=>r.t>=now-30*60000), rp=p.filter(r=>r.t>=now-30*60000);
   const bz=mean(rm.map(r=>r.bz)), bzMin=rm.length?Math.min(...rm.map(r=>r.bz)):null;
@@ -474,8 +475,8 @@ async function run(){
   const jobs=[
     ['Kp NOAA (prévision 3 jours)',()=>noaa('products/noaa-planetary-k-index-forecast.json')],
     ['Perspective NOAA 27 jours',()=>noaa('text/27-day-outlook.txt','text')],
-    ['Champ magnétique Bz (NOAA)',()=>noaa('products/solar-wind/mag-1-day.json')],
-    ['Plasma solaire (NOAA)',()=>noaa('products/solar-wind/plasma-1-day.json')],
+    ['Champ magnétique Bz (NOAA)',()=>noaaAny(['products/solar-wind/mag-2-hour.json','products/solar-wind/mag-1-day.json','json/rtsw/rtsw_mag_1m.json'])],
+    ['Plasma solaire (NOAA)',()=>noaaAny(['products/solar-wind/plasma-2-hour.json','products/solar-wind/plasma-1-day.json','json/rtsw/rtsw_wind_1m.json'])],
     ['Alertes NOAA',()=>noaa('products/alerts.json')],
     ['Météo Open-Meteo (modèle par défaut)',()=>fetchWith(omURL('',VARS_A))],
     ['Météo Open-Meteo (ECMWF IFS)',()=>fetchWith(omURL('ecmwf_ifs025',VARS_B))]
